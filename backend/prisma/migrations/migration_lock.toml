@@ -1,0 +1,4 @@
+provider = "prisma"
+
+[[migrations]]
+migration = "20261026000000_init_schedula_schema"

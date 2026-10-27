@@ -1,0 +1,176 @@
+{
+  "_comment": "Schedula Stage 2 ER Contract — used by scripts/validate-er.js. This is a validation input, not AI meta-notes.",
+  "version": "2.0.0",
+  "tables": [
+    {
+      "name": "users",
+      "module": "user",
+      "required_columns": ["id", "email", "phone", "password_hash", "status", "is_email_verified", "is_phone_verified", "last_login_at", "created_at", "updated_at"]
+    },
+    {
+      "name": "oauth_accounts",
+      "module": "user",
+      "required_columns": ["id", "user_id", "provider", "provider_account_id", "provider_email", "linked_at"]
+    },
+    {
+      "name": "user_roles",
+      "module": "user",
+      "required_columns": ["id", "user_id", "role", "granted_at", "granted_by_user_id"]
+    },
+    {
+      "name": "verification_tokens",
+      "module": "user",
+      "required_columns": ["id", "user_id", "purpose", "target", "token_hash", "expires_at", "consumed_at", "attempt_count", "created_at"]
+    },
+    {
+      "name": "patients",
+      "module": "patient",
+      "required_columns": ["id", "user_id", "patient_code", "given_name", "family_name", "sex", "date_of_birth", "age_estimated_years", "contact_phone", "alternate_phone", "email", "guardian_name", "old_file_number", "whatsapp_opt_in", "registered_by_user_id", "created_at", "updated_at"]
+    },
+    {
+      "name": "doctors",
+      "module": "doctor",
+      "required_columns": ["id", "user_id", "doctor_code", "onboarding_status", "medical_council", "registration_number", "credentials_verified_at", "verified_by_user_id", "is_active_for_booking", "created_at", "updated_at"]
+    },
+    {
+      "name": "doctor_profiles",
+      "module": "doctor",
+      "required_columns": ["id", "doctor_id", "display_name", "qualifications", "bio", "years_of_experience", "updated_at"]
+    },
+    {
+      "name": "specializations",
+      "module": "doctor",
+      "required_columns": ["id", "code", "name", "description", "is_active"]
+    },
+    {
+      "name": "doctor_specializations",
+      "module": "doctor",
+      "required_columns": ["doctor_id", "specialization_id", "is_primary", "assigned_at"]
+    },
+    {
+      "name": "recurring_availability_rules",
+      "module": "availability",
+      "required_columns": ["id", "doctor_id", "day_of_week", "start_time", "end_time", "session_mode", "queue_order", "slot_duration_minutes", "default_advance_capacity", "default_walkin_capacity", "effective_from", "effective_to", "is_active"]
+    },
+    {
+      "name": "availability_exceptions",
+      "module": "availability",
+      "required_columns": ["id", "doctor_id", "exception_date", "start_time", "end_time", "kind", "reason", "created_at"]
+    },
+    {
+      "name": "elastic_sessions",
+      "module": "availability",
+      "required_columns": ["id", "doctor_id", "source_rule_id", "session_date", "start_time", "end_time", "session_mode", "queue_order", "status", "delay_offset_minutes", "allow_quota_override", "last_issued_token", "version", "consulting_ended_at", "noshow_swept_at", "created_at", "updated_at"]
+    },
+    {
+      "name": "session_timed_slots",
+      "module": "availability",
+      "required_columns": ["id", "session_id", "slot_start_time", "slot_end_time", "status", "created_at"]
+    },
+    {
+      "name": "slot_allocations",
+      "module": "availability",
+      "required_columns": ["id", "session_id", "timed_slot_id", "pool_type", "max_capacity", "booked_count", "version", "updated_at"]
+    },
+    {
+      "name": "appointments",
+      "module": "appointment",
+      "required_columns": ["id", "booking_reference", "patient_id", "doctor_id", "session_id", "allocation_id", "timed_slot_id", "pool_type", "token_number", "visit_kind", "channel", "status", "is_emergency_priority", "reason_for_visit", "referred_by_name", "booked_by_user_id", "override_authorized_by_user_id", "override_reason", "checked_in_at", "consult_started_at", "completed_at", "cancelled_at", "cancelled_by_role", "cancellation_reason", "created_at", "updated_at"]
+    },
+    {
+      "name": "reschedule_histories",
+      "module": "appointment",
+      "required_columns": ["id", "appointment_id", "previous_session_id", "previous_allocation_id", "previous_timed_slot_id", "previous_pool_type", "previous_token_number", "new_session_id", "new_allocation_id", "new_timed_slot_id", "new_pool_type", "new_token_number", "rescheduled_by_user_id", "initiator_role", "reason", "rescheduled_at"]
+    },
+    {
+      "name": "notifications",
+      "module": "appointment",
+      "required_columns": ["id", "appointment_id", "recipient_patient_id", "recipient_user_id", "channel", "event_type", "template_code", "payload_snapshot", "status", "idempotency_key", "failure_reason", "scheduled_for", "sent_at", "delivered_at", "read_at", "created_at"]
+    }
+  ],
+  "enums": [
+    { "prisma_name": "UserAccountStatus", "pg_name": "user_account_status" },
+    { "prisma_name": "OauthProvider", "pg_name": "oauth_provider" },
+    { "prisma_name": "AppRole", "pg_name": "app_role" },
+    { "prisma_name": "VerificationTokenPurpose", "pg_name": "verification_token_purpose" },
+    { "prisma_name": "SexType", "pg_name": "sex_type" },
+    { "prisma_name": "DoctorOnboardingStatus", "pg_name": "doctor_onboarding_status" },
+    { "prisma_name": "SchedulingMode", "pg_name": "scheduling_mode" },
+    { "prisma_name": "QueueOrderingRule", "pg_name": "queue_ordering_rule" },
+    { "prisma_name": "ExceptionType", "pg_name": "exception_type" },
+    { "prisma_name": "SessionLifecycleStatus", "pg_name": "session_lifecycle_status" },
+    { "prisma_name": "AllocationPoolType", "pg_name": "allocation_pool_type" },
+    { "prisma_name": "TimedSlotStatus", "pg_name": "timed_slot_status" },
+    { "prisma_name": "VisitType", "pg_name": "visit_type" },
+    { "prisma_name": "BookingChannelType", "pg_name": "booking_channel_type" },
+    { "prisma_name": "AppointmentStatus", "pg_name": "appointment_status" },
+    { "prisma_name": "CancellationActorType", "pg_name": "cancellation_actor_type" },
+    { "prisma_name": "RescheduleInitiatorType", "pg_name": "reschedule_initiator_type" },
+    { "prisma_name": "NotificationChannel", "pg_name": "notification_channel" },
+    { "prisma_name": "NotificationEventType", "pg_name": "notification_event_type" },
+    { "prisma_name": "NotificationDeliveryStatus", "pg_name": "notification_delivery_status" }
+  ],
+  "relationships": [
+    { "from": "users", "to": "oauth_accounts", "type": "one_to_many", "via": "user_id" },
+    { "from": "users", "to": "user_roles", "type": "one_to_many", "via": "user_id" },
+    { "from": "users", "to": "verification_tokens", "type": "one_to_many", "via": "user_id" },
+    { "from": "users", "to": "patients", "type": "one_to_zero_or_one", "via": "user_id", "nullable": true },
+    { "from": "users", "to": "doctors", "type": "one_to_zero_or_one", "via": "user_id" },
+    { "from": "doctors", "to": "doctor_profiles", "type": "one_to_one", "via": "doctor_id" },
+    { "from": "doctors", "to": "doctor_specializations", "type": "one_to_many", "via": "doctor_id" },
+    { "from": "specializations", "to": "doctor_specializations", "type": "one_to_many", "via": "specialization_id" },
+    { "from": "doctors", "to": "recurring_availability_rules", "type": "one_to_many", "via": "doctor_id" },
+    { "from": "doctors", "to": "availability_exceptions", "type": "one_to_many", "via": "doctor_id" },
+    { "from": "doctors", "to": "elastic_sessions", "type": "one_to_many", "via": "doctor_id" },
+    { "from": "recurring_availability_rules", "to": "elastic_sessions", "type": "one_to_many", "via": "source_rule_id" },
+    { "from": "elastic_sessions", "to": "session_timed_slots", "type": "one_to_many", "via": "session_id" },
+    { "from": "elastic_sessions", "to": "slot_allocations", "type": "one_to_many", "via": "session_id" },
+    { "from": "session_timed_slots", "to": "slot_allocations", "type": "one_to_many", "via": "timed_slot_id" },
+    { "from": "patients", "to": "appointments", "type": "one_to_many", "via": "patient_id" },
+    { "from": "doctors", "to": "appointments", "type": "one_to_many", "via": "doctor_id" },
+    { "from": "elastic_sessions", "to": "appointments", "type": "one_to_many", "via": "session_id" },
+    { "from": "slot_allocations", "to": "appointments", "type": "one_to_many", "via": "allocation_id" },
+    { "from": "session_timed_slots", "to": "appointments", "type": "one_to_many", "via": "timed_slot_id", "nullable": true },
+    { "from": "appointments", "to": "reschedule_histories", "type": "one_to_many", "via": "appointment_id" },
+    { "from": "appointments", "to": "notifications", "type": "one_to_many", "via": "appointment_id" },
+    { "from": "patients", "to": "notifications", "type": "one_to_many", "via": "recipient_patient_id" }
+  ],
+  "critical_named_constraints": [
+    { "table": "users", "name": "users_require_email_or_phone", "type": "check" },
+    { "table": "users", "name": "users_email_lowercase", "type": "check" },
+    { "table": "patients", "name": "ck_patient_age_or_dob", "type": "check" },
+    { "table": "doctors", "name": "ck_doctor_active_requires_approved", "type": "check" },
+    { "table": "doctors", "name": "ck_doctor_approved_requires_verification", "type": "check" },
+    { "table": "doctors", "name": "uq_doctor_medical_registration", "type": "unique" },
+    { "table": "doctor_specializations", "name": "idx_doctor_specializations_one_primary", "type": "partial_unique_index" },
+    { "table": "recurring_availability_rules", "name": "ck_rar_mode_queue_match", "type": "check" },
+    { "table": "elastic_sessions", "name": "excl_es_no_overlap_active", "type": "exclusion" },
+    { "table": "elastic_sessions", "name": "uq_elastic_sessions_id_doctor_id", "type": "unique" },
+    { "table": "session_timed_slots", "name": "excl_sts_no_overlap", "type": "exclusion" },
+    { "table": "session_timed_slots", "name": "uq_sts_id_session_id", "type": "unique" },
+    { "table": "slot_allocations", "name": "ck_sa_booked_count_range", "type": "check" },
+    { "table": "slot_allocations", "name": "idx_sa_session_pool_session_level", "type": "partial_unique_index" },
+    { "table": "slot_allocations", "name": "idx_sa_timed_slot_pool", "type": "partial_unique_index" },
+    { "table": "slot_allocations", "name": "uq_sa_id_session_pool", "type": "unique" },
+    { "table": "appointments", "name": "fk_appt_session_doctor_composite", "type": "composite_fk" },
+    { "table": "appointments", "name": "fk_appt_allocation_session_pool_composite", "type": "composite_fk" },
+    { "table": "appointments", "name": "fk_appt_timed_slot_session_composite", "type": "composite_fk" },
+    { "table": "appointments", "name": "idx_appt_patient_session_active", "type": "partial_unique_index" },
+    { "table": "appointments", "name": "ck_appt_channel_pool_type", "type": "check" },
+    { "table": "appointments", "name": "ck_appt_override_overflow_meta", "type": "check" },
+    { "table": "appointments", "name": "ck_appt_cancelled_metadata", "type": "check" },
+    { "table": "reschedule_histories", "name": "fk_rh_prev_alloc_session_pool_composite", "type": "composite_fk" },
+    { "table": "reschedule_histories", "name": "fk_rh_new_alloc_session_pool_composite", "type": "composite_fk" },
+    { "table": "notifications", "name": "ck_notif_one_recipient", "type": "check" },
+    { "table": "notifications", "name": "ck_notif_read_at_status", "type": "check" },
+    { "trigger": "appointments", "name": "trg_appointments_mode_check", "type": "trigger" },
+    { "trigger": "reschedule_histories", "name": "trg_reschedule_histories_immutable", "type": "trigger" }
+  ],
+  "required_artifacts": [
+    { "path": "docs/ER-Diagram.mmd", "description": "Raw Mermaid erDiagram source" },
+    { "path": "docs/ER-Diagram.md", "description": "Diagram with entity/relationship catalogue" },
+    { "path": "docs/ER-Diagram-Review.md", "description": "Design decisions, constraints, transaction invariants, 12-scenario matrix" },
+    { "path": "backend/prisma/schema.prisma", "description": "Prisma ORM schema" },
+    { "path": "backend/prisma/migrations/20261026000000_init_schedula_schema/migration.sql", "description": "PostgreSQL migration SQL" }
+  ]
+}

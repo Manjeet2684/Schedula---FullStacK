@@ -1,0 +1,27 @@
+{
+  "name": "schedula",
+  "version": "2.0.0",
+  "description": "Schedula — Doctor–Patient Scheduling System (Stage 2 Foundation)",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build:backend": "npm run build --workspace=backend",
+    "build:frontend": "npm run build --workspace=frontend",
+    "typecheck:backend": "npm run typecheck --workspace=backend",
+    "typecheck:frontend": "npm run typecheck --workspace=frontend",
+    "prisma:generate": "npm run prisma:generate --workspace=backend",
+    "db:start": "docker compose up -d postgres",
+    "db:migrate": "npm run db:migrate --workspace=backend",
+    "validate:er": "node scripts/validate-er.js",
+    "verify:db": "echo \"Run: psql <connection-string> -f scripts/verify-db.sql  (use a DISPOSABLE test database only)\""
+  },
+  "engines": {
+    "node": "24.22.1",
+    "npm": ">=10.0.0"
+  }
+}

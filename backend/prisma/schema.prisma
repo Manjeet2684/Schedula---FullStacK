@@ -1,0 +1,579 @@
+// Schedula — Prisma Schema (Stage 2 Foundation)
+// Prisma ORM 7.10.1
+// PostgreSQL 17
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// datasource url is managed via prisma.config.ts (Prisma 7 pattern)
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum UserAccountStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+
+  @@map("user_account_status")
+}
+
+enum OauthProvider {
+  GOOGLE
+
+  @@map("oauth_provider")
+}
+
+enum AppRole {
+  PATIENT
+  DOCTOR
+  RECEPTIONIST
+  ADMIN
+
+  @@map("app_role")
+}
+
+enum VerificationTokenPurpose {
+  EMAIL_VERIFY
+  PHONE_OTP
+  DOCTOR_INVITE
+  PASSWORD_RESET
+
+  @@map("verification_token_purpose")
+}
+
+enum SexType {
+  FEMALE
+  MALE
+  OTHER
+  UNKNOWN
+
+  @@map("sex_type")
+}
+
+enum DoctorOnboardingStatus {
+  DRAFT
+  PENDING_VERIFICATION
+  APPROVED
+  SUSPENDED
+
+  @@map("doctor_onboarding_status")
+}
+
+enum SchedulingMode {
+  TOKEN_SESSION
+  TIMED_SESSION
+
+  @@map("scheduling_mode")
+}
+
+enum QueueOrderingRule {
+  BY_TOKEN
+  BY_ARRIVAL
+
+  @@map("queue_ordering_rule")
+}
+
+enum ExceptionType {
+  LEAVE
+  HOLIDAY
+  EMERGENCY_CLOSURE
+  CUSTOM_HOURS
+
+  @@map("exception_type")
+}
+
+enum SessionLifecycleStatus {
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+
+  @@map("session_lifecycle_status")
+}
+
+enum AllocationPoolType {
+  ADVANCE_BOOKING
+  WALK_IN_RESERVE
+  OVERRIDE_OVERFLOW
+
+  @@map("allocation_pool_type")
+}
+
+enum TimedSlotStatus {
+  AVAILABLE
+  BLOCKED_BY_SHRINK
+  CANCELLED
+
+  @@map("timed_slot_status")
+}
+
+enum VisitType {
+  NEW_VISIT
+  FOLLOW_UP
+
+  @@map("visit_type")
+}
+
+enum BookingChannelType {
+  WEB_PATIENT
+  RECEPTION_DESK
+  WHATSAPP_BOT
+
+  @@map("booking_channel_type")
+}
+
+enum AppointmentStatus {
+  BOOKED
+  CHECKED_IN
+  IN_CONSULT
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+
+  @@map("appointment_status")
+}
+
+enum CancellationActorType {
+  PATIENT
+  DOCTOR
+  RECEPTIONIST
+  SYSTEM
+
+  @@map("cancellation_actor_type")
+}
+
+enum RescheduleInitiatorType {
+  PATIENT
+  DOCTOR
+  RECEPTIONIST
+  SYSTEM_ELASTIC
+
+  @@map("reschedule_initiator_type")
+}
+
+enum NotificationChannel {
+  EMAIL
+  WHATSAPP
+  SMS
+  IN_APP
+
+  @@map("notification_channel")
+}
+
+enum NotificationEventType {
+  BOOKING_CONFIRMED
+  REMINDER_24H
+  REMINDER_1H
+  DOCTOR_DELAY
+  RESCHEDULED
+  CANCELLED_BY_DOCTOR
+  CANCELLED_BY_PATIENT
+  SLOT_REENGAGEMENT
+
+  @@map("notification_event_type")
+}
+
+enum NotificationDeliveryStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+
+  @@map("notification_delivery_status")
+}
+
+// ─────────────────────────────────────────────
+// USER MODULE
+// ─────────────────────────────────────────────
+
+model User {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email             String?           @unique @db.VarChar(255)
+  phone             String?           @db.VarChar(32)
+  passwordHash      String?           @map("password_hash") @db.VarChar(255)
+  status            UserAccountStatus @default(PENDING_VERIFICATION)
+  isEmailVerified   Boolean           @default(false) @map("is_email_verified")
+  isPhoneVerified   Boolean           @default(false) @map("is_phone_verified")
+  lastLoginAt       DateTime?         @map("last_login_at") @db.Timestamptz
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+
+  oauthAccounts          OauthAccount[]
+  roles                  UserRole[]           @relation("UserRoles")
+  grantedRoles           UserRole[]           @relation("GrantedByUser")
+  verificationTokens     VerificationToken[]
+  doctorRecord           Doctor?              @relation("DoctorUser")
+  verifiedDoctors        Doctor[]             @relation("VerifiedByUser")
+  patientRecord          Patient?             @relation("PatientUser")
+  registeredPatients     Patient[]            @relation("RegisteredByUser")
+  bookedAppointments     Appointment[]        @relation("BookedByUser")
+  authorizedOverrides    Appointment[]        @relation("OverrideAuthorizedBy")
+  rescheduleHistories    RescheduleHistory[]  @relation("RescheduledByUser")
+  notifications          Notification[]
+
+  @@index([phone])
+  @@map("users")
+}
+
+model OauthAccount {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String        @map("user_id") @db.Uuid
+  provider          OauthProvider
+  providerAccountId String        @map("provider_account_id") @db.VarChar(255)
+  providerEmail     String?       @map("provider_email") @db.VarChar(255)
+  linkedAt          DateTime      @default(now()) @map("linked_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("oauth_accounts")
+}
+
+model UserRole {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  role            AppRole
+  grantedAt       DateTime @default(now()) @map("granted_at") @db.Timestamptz
+  grantedByUserId String?  @map("granted_by_user_id") @db.Uuid
+
+  user        User  @relation("UserRoles", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy   User? @relation("GrantedByUser", fields: [grantedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, role])
+  @@map("user_roles")
+}
+
+model VerificationToken {
+  id           String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String                   @map("user_id") @db.Uuid
+  purpose      VerificationTokenPurpose
+  target       String                   @db.VarChar(255)
+  tokenHash    String                   @map("token_hash") @db.VarChar(128)
+  expiresAt    DateTime                 @map("expires_at") @db.Timestamptz
+  consumedAt   DateTime?                @map("consumed_at") @db.Timestamptz
+  attemptCount Int                      @default(0) @map("attempt_count")
+  createdAt    DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, target, expiresAt])
+  @@map("verification_tokens")
+}
+
+// ─────────────────────────────────────────────
+// PATIENT MODULE
+// ─────────────────────────────────────────────
+
+model Patient {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId              String?   @unique @map("user_id") @db.Uuid
+  patientCode         String    @unique @map("patient_code") @db.VarChar(32)
+  givenName           String    @map("given_name") @db.VarChar(120)
+  familyName          String?   @map("family_name") @db.VarChar(120)
+  sex                 SexType
+  dateOfBirth         DateTime? @map("date_of_birth") @db.Date
+  ageEstimatedYears   Int?      @map("age_estimated_years") @db.SmallInt
+  contactPhone        String    @map("contact_phone") @db.VarChar(32)
+  alternatePhone      String?   @map("alternate_phone") @db.VarChar(32)
+  email               String?   @db.VarChar(255)
+  guardianName        String?   @map("guardian_name") @db.VarChar(160)
+  oldFileNumber       String?   @map("old_file_number") @db.VarChar(64)
+  whatsappOptIn       Boolean   @default(false) @map("whatsapp_opt_in")
+  registeredByUserId  String?   @map("registered_by_user_id") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  user             User?         @relation("PatientUser", fields: [userId], references: [id], onDelete: SetNull)
+  registeredBy     User?         @relation("RegisteredByUser", fields: [registeredByUserId], references: [id], onDelete: SetNull)
+  appointments     Appointment[]
+  notifications    Notification[]
+
+  @@index([contactPhone])
+  @@index([givenName, familyName])
+  @@index([oldFileNumber])
+  @@map("patients")
+}
+
+// ─────────────────────────────────────────────
+// DOCTOR MODULE
+// ─────────────────────────────────────────────
+
+model Doctor {
+  id                     String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                 String                 @unique @map("user_id") @db.Uuid
+  doctorCode             String                 @unique @map("doctor_code") @db.VarChar(32)
+  onboardingStatus       DoctorOnboardingStatus @default(PENDING_VERIFICATION) @map("onboarding_status")
+  medicalCouncil         String                 @map("medical_council") @db.VarChar(32)
+  registrationNumber     String                 @map("registration_number") @db.VarChar(64)
+  credentialsVerifiedAt  DateTime?              @map("credentials_verified_at") @db.Timestamptz
+  verifiedByUserId       String?                @map("verified_by_user_id") @db.Uuid
+  isActiveForBooking     Boolean                @default(false) @map("is_active_for_booking")
+  createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+
+  user                    User                         @relation("DoctorUser", fields: [userId], references: [id], onDelete: Restrict)
+  verifiedBy              User?                        @relation("VerifiedByUser", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
+  profile                 DoctorProfile?
+  specializations         DoctorSpecialization[]
+  recurringRules          RecurringAvailabilityRule[]
+  availabilityExceptions  AvailabilityException[]
+  sessions                ElasticSession[]
+  appointments            Appointment[]
+
+  @@unique([medicalCouncil, registrationNumber])
+  @@map("doctors")
+}
+
+model DoctorProfile {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  doctorId           String   @unique @map("doctor_id") @db.Uuid
+  displayName        String   @map("display_name") @db.VarChar(120)
+  qualifications     String   @db.VarChar(500)
+  bio                String?  @db.Text
+  yearsOfExperience  Int      @default(0) @map("years_of_experience")
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@map("doctor_profiles")
+}
+
+model Specialization {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code         String   @unique @db.VarChar(32)
+  name         String   @unique @db.VarChar(120)
+  description  String?  @db.Text
+  isActive     Boolean  @default(true) @map("is_active")
+
+  doctors DoctorSpecialization[]
+
+  @@map("specializations")
+}
+
+model DoctorSpecialization {
+  doctorId          String   @map("doctor_id") @db.Uuid
+  specializationId  String   @map("specialization_id") @db.Uuid
+  isPrimary         Boolean  @default(false) @map("is_primary")
+  assignedAt        DateTime @default(now()) @map("assigned_at") @db.Timestamptz
+
+  doctor          Doctor         @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  specialization  Specialization @relation(fields: [specializationId], references: [id], onDelete: Restrict)
+
+  @@id([doctorId, specializationId])
+  @@map("doctor_specializations")
+}
+
+// ─────────────────────────────────────────────
+// AVAILABILITY MODULE
+// ─────────────────────────────────────────────
+
+model RecurringAvailabilityRule {
+  id                       String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  doctorId                 String         @map("doctor_id") @db.Uuid
+  dayOfWeek                Int            @map("day_of_week")
+  startTime                DateTime       @map("start_time") @db.Time
+  endTime                  DateTime       @map("end_time") @db.Time
+  sessionMode              SchedulingMode @map("session_mode")
+  queueOrder               QueueOrderingRule @map("queue_order")
+  slotDurationMinutes      Int?           @map("slot_duration_minutes")
+  defaultAdvanceCapacity   Int            @default(0) @map("default_advance_capacity")
+  defaultWalkinCapacity    Int            @default(0) @map("default_walkin_capacity")
+  effectiveFrom            DateTime       @map("effective_from") @db.Date
+  effectiveTo              DateTime?      @map("effective_to") @db.Date
+  isActive                 Boolean        @default(true) @map("is_active")
+
+  doctor    Doctor          @relation(fields: [doctorId], references: [id])
+  sessions  ElasticSession[]
+
+  @@index([doctorId, dayOfWeek])
+  @@map("recurring_availability_rules")
+}
+
+model AvailabilityException {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  doctorId       String        @map("doctor_id") @db.Uuid
+  exceptionDate  DateTime      @map("exception_date") @db.Date
+  startTime      DateTime?     @map("start_time") @db.Time
+  endTime        DateTime?     @map("end_time") @db.Time
+  kind           ExceptionType
+  reason         String?       @db.Text
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  doctor Doctor @relation(fields: [doctorId], references: [id])
+
+  @@index([doctorId, exceptionDate])
+  @@map("availability_exceptions")
+}
+
+model ElasticSession {
+  id                   String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  doctorId             String                  @map("doctor_id") @db.Uuid
+  sourceRuleId         String?                 @map("source_rule_id") @db.Uuid
+  sessionDate          DateTime                @map("session_date") @db.Date
+  startTime            DateTime                @map("start_time") @db.Time
+  endTime              DateTime                @map("end_time") @db.Time
+  sessionMode          SchedulingMode          @map("session_mode")
+  queueOrder           QueueOrderingRule       @map("queue_order")
+  status               SessionLifecycleStatus  @default(SCHEDULED)
+  delayOffsetMinutes   Int                     @default(0) @map("delay_offset_minutes")
+  allowQuotaOverride   Boolean                 @default(false) @map("allow_quota_override")
+  lastIssuedToken      Int                     @default(0) @map("last_issued_token")
+  version              Int                     @default(1)
+  consultingEndedAt    DateTime?               @map("consulting_ended_at") @db.Timestamptz
+  noshowSweptAt        DateTime?               @map("noshow_swept_at") @db.Timestamptz
+  createdAt            DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+
+  doctor                  Doctor                     @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  sourceRule              RecurringAvailabilityRule? @relation(fields: [sourceRuleId], references: [id], onDelete: SetNull)
+  timedSlots              SessionTimedSlot[]
+  allocations             SlotAllocation[]
+  appointments            Appointment[]
+  rescheduleHistoriesPrev RescheduleHistory[]        @relation("PreviousSession")
+  rescheduleHistoriesNew  RescheduleHistory[]        @relation("NewSession")
+
+  @@unique([id, doctorId])
+  @@map("elastic_sessions")
+}
+
+model SessionTimedSlot {
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId     String          @map("session_id") @db.Uuid
+  slotStartTime DateTime        @map("slot_start_time") @db.Time
+  slotEndTime   DateTime        @map("slot_end_time") @db.Time
+  status        TimedSlotStatus @default(AVAILABLE)
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz
+
+  session      ElasticSession  @relation(fields: [sessionId], references: [id])
+  appointments Appointment[]
+
+  @@unique([sessionId, slotStartTime])
+  @@unique([id, sessionId])
+  @@map("session_timed_slots")
+}
+
+model SlotAllocation {
+  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId    String             @map("session_id") @db.Uuid
+  timedSlotId  String?            @map("timed_slot_id") @db.Uuid
+  poolType     AllocationPoolType @map("pool_type")
+  maxCapacity  Int                @map("max_capacity")
+  bookedCount  Int                @default(0) @map("booked_count")
+  version      Int                @default(1)
+  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  session      ElasticSession   @relation(fields: [sessionId], references: [id])
+  appointments Appointment[]
+
+  @@unique([id, sessionId, poolType])
+  @@map("slot_allocations")
+}
+
+// ─────────────────────────────────────────────
+// APPOINTMENT MODULE
+// ─────────────────────────────────────────────
+
+model Appointment {
+  id                          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingReference            String              @unique @map("booking_reference") @db.VarChar(40)
+  patientId                   String              @map("patient_id") @db.Uuid
+  doctorId                    String              @map("doctor_id") @db.Uuid
+  sessionId                   String              @map("session_id") @db.Uuid
+  allocationId                String              @map("allocation_id") @db.Uuid
+  timedSlotId                 String?             @map("timed_slot_id") @db.Uuid
+  poolType                    AllocationPoolType  @map("pool_type")
+  tokenNumber                 Int?                @map("token_number")
+  visitKind                   VisitType           @map("visit_kind")
+  channel                     BookingChannelType
+  status                      AppointmentStatus   @default(BOOKED)
+  isEmergencyPriority         Boolean             @default(false) @map("is_emergency_priority")
+  reasonForVisit              String?             @map("reason_for_visit") @db.Text
+  referredByName              String?             @map("referred_by_name") @db.VarChar(160)
+  bookedByUserId              String?             @map("booked_by_user_id") @db.Uuid
+  overrideAuthorizedByUserId  String?             @map("override_authorized_by_user_id") @db.Uuid
+  overrideReason              String?             @map("override_reason") @db.Text
+  checkedInAt                 DateTime?           @map("checked_in_at") @db.Timestamptz
+  consultStartedAt            DateTime?           @map("consult_started_at") @db.Timestamptz
+  completedAt                 DateTime?           @map("completed_at") @db.Timestamptz
+  cancelledAt                 DateTime?           @map("cancelled_at") @db.Timestamptz
+  cancelledByRole             CancellationActorType? @map("cancelled_by_role")
+  cancellationReason          String?             @map("cancellation_reason") @db.Text
+  createdAt                   DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                   DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  patient               Patient          @relation(fields: [patientId], references: [id])
+  doctor                Doctor           @relation(fields: [doctorId], references: [id])
+  session               ElasticSession   @relation(fields: [sessionId], references: [id])
+  allocation            SlotAllocation   @relation(fields: [allocationId], references: [id])
+  timedSlot             SessionTimedSlot?  @relation(fields: [timedSlotId], references: [id])
+  bookedBy              User?              @relation("BookedByUser", fields: [bookedByUserId], references: [id], onDelete: SetNull)
+  overrideAuthorizedBy  User?              @relation("OverrideAuthorizedBy", fields: [overrideAuthorizedByUserId], references: [id], onDelete: SetNull)
+  rescheduleHistories   RescheduleHistory[]
+  notifications         Notification[]
+
+  @@index([patientId, createdAt(sort: Desc)])
+  @@index([sessionId, status, isEmergencyPriority(sort: Desc), tokenNumber(sort: Asc)])
+  @@map("appointments")
+}
+
+model RescheduleHistory {
+  id                      String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  appointmentId           String                   @map("appointment_id") @db.Uuid
+  previousSessionId       String                   @map("previous_session_id") @db.Uuid
+  previousAllocationId    String                   @map("previous_allocation_id") @db.Uuid
+  previousTimedSlotId     String?                  @map("previous_timed_slot_id") @db.Uuid
+  previousPoolType        AllocationPoolType       @map("previous_pool_type")
+  previousTokenNumber     Int?                     @map("previous_token_number")
+  newSessionId            String                   @map("new_session_id") @db.Uuid
+  newAllocationId         String                   @map("new_allocation_id") @db.Uuid
+  newTimedSlotId          String?                  @map("new_timed_slot_id") @db.Uuid
+  newPoolType             AllocationPoolType       @map("new_pool_type")
+  newTokenNumber          Int?                     @map("new_token_number")
+  rescheduledByUserId     String?                  @map("rescheduled_by_user_id") @db.Uuid
+  initiatorRole           RescheduleInitiatorType  @map("initiator_role")
+  reason                  String?                  @db.Text
+  rescheduledAt           DateTime                 @default(now()) @map("rescheduled_at") @db.Timestamptz
+
+  appointment         Appointment     @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  rescheduledBy       User?           @relation("RescheduledByUser", fields: [rescheduledByUserId], references: [id], onDelete: SetNull)
+  previousSession     ElasticSession  @relation("PreviousSession", fields: [previousSessionId], references: [id], onDelete: Restrict)
+  newSession          ElasticSession  @relation("NewSession", fields: [newSessionId], references: [id], onDelete: Restrict)
+
+  @@index([appointmentId, rescheduledAt(sort: Desc)])
+  @@map("reschedule_histories")
+}
+
+model Notification {
+  id                  String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  appointmentId       String?                    @map("appointment_id") @db.Uuid
+  recipientPatientId  String?                    @map("recipient_patient_id") @db.Uuid
+  recipientUserId     String?                    @map("recipient_user_id") @db.Uuid
+  channel             NotificationChannel
+  eventType           NotificationEventType      @map("event_type")
+  templateCode        String                     @map("template_code") @db.VarChar(64)
+  payloadSnapshot     Json                       @default("{}") @map("payload_snapshot")
+  status              NotificationDeliveryStatus @default(QUEUED)
+  idempotencyKey      String                     @unique @map("idempotency_key") @db.VarChar(128)
+  failureReason       String?                    @map("failure_reason") @db.Text
+  scheduledFor        DateTime                   @map("scheduled_for") @db.Timestamptz
+  sentAt              DateTime?                  @map("sent_at") @db.Timestamptz
+  deliveredAt         DateTime?                  @map("delivered_at") @db.Timestamptz
+  readAt              DateTime?                  @map("read_at") @db.Timestamptz
+  createdAt           DateTime                   @default(now()) @map("created_at") @db.Timestamptz
+
+  recipientPatient  Patient? @relation(fields: [recipientPatientId], references: [id], onDelete: Restrict)
+  recipientUser     User?    @relation(fields: [recipientUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, scheduledFor])
+  @@map("notifications")
+}

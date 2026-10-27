@@ -1,0 +1,269 @@
+erDiagram
+    users {
+        uuid id PK
+        varchar email UK
+        varchar phone
+        varchar password_hash
+        user_account_status status
+        boolean is_email_verified
+        boolean is_phone_verified
+        timestamptz last_login_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    oauth_accounts {
+        uuid id PK
+        uuid user_id FK
+        oauth_provider provider
+        varchar provider_account_id
+        varchar provider_email
+        timestamptz linked_at
+    }
+
+    user_roles {
+        uuid id PK
+        uuid user_id FK
+        app_role role
+        timestamptz granted_at
+        uuid granted_by_user_id FK
+    }
+
+    verification_tokens {
+        uuid id PK
+        uuid user_id FK
+        verification_token_purpose purpose
+        varchar target
+        varchar token_hash
+        timestamptz expires_at
+        timestamptz consumed_at
+        integer attempt_count
+        timestamptz created_at
+    }
+
+    patients {
+        uuid id PK
+        uuid user_id FK "nullable, unique"
+        varchar patient_code UK
+        varchar given_name
+        varchar family_name
+        sex_type sex
+        date date_of_birth
+        smallint age_estimated_years
+        varchar contact_phone
+        varchar alternate_phone
+        varchar email
+        varchar guardian_name
+        varchar old_file_number
+        boolean whatsapp_opt_in
+        uuid registered_by_user_id FK
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    doctors {
+        uuid id PK
+        uuid user_id FK UK
+        varchar doctor_code UK
+        doctor_onboarding_status onboarding_status
+        varchar medical_council
+        varchar registration_number
+        timestamptz credentials_verified_at
+        uuid verified_by_user_id FK
+        boolean is_active_for_booking
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    doctor_profiles {
+        uuid id PK
+        uuid doctor_id FK UK
+        varchar display_name
+        varchar qualifications
+        text bio
+        integer years_of_experience
+        timestamptz updated_at
+    }
+
+    specializations {
+        uuid id PK
+        varchar code UK
+        varchar name UK
+        text description
+        boolean is_active
+    }
+
+    doctor_specializations {
+        uuid doctor_id PK,FK
+        uuid specialization_id PK,FK
+        boolean is_primary
+        timestamptz assigned_at
+    }
+
+    recurring_availability_rules {
+        uuid id PK
+        uuid doctor_id FK
+        smallint day_of_week
+        time start_time
+        time end_time
+        scheduling_mode session_mode
+        queue_ordering_rule queue_order
+        integer slot_duration_minutes
+        integer default_advance_capacity
+        integer default_walkin_capacity
+        date effective_from
+        date effective_to
+        boolean is_active
+    }
+
+    availability_exceptions {
+        uuid id PK
+        uuid doctor_id FK
+        date exception_date
+        time start_time
+        time end_time
+        exception_type kind
+        text reason
+        timestamptz created_at
+    }
+
+    elastic_sessions {
+        uuid id PK
+        uuid doctor_id FK
+        uuid source_rule_id FK "nullable"
+        date session_date
+        time start_time
+        time end_time
+        scheduling_mode session_mode
+        queue_ordering_rule queue_order
+        session_lifecycle_status status
+        integer delay_offset_minutes
+        boolean allow_quota_override
+        integer last_issued_token
+        integer version
+        timestamptz consulting_ended_at
+        timestamptz noshow_swept_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    session_timed_slots {
+        uuid id PK
+        uuid session_id FK
+        time slot_start_time
+        time slot_end_time
+        timed_slot_status status
+        timestamptz created_at
+    }
+
+    slot_allocations {
+        uuid id PK
+        uuid session_id FK
+        uuid timed_slot_id FK "nullable"
+        allocation_pool_type pool_type
+        integer max_capacity
+        integer booked_count
+        integer version
+        timestamptz updated_at
+    }
+
+    appointments {
+        uuid id PK
+        varchar booking_reference UK
+        uuid patient_id FK
+        uuid doctor_id FK
+        uuid session_id FK
+        uuid allocation_id FK
+        uuid timed_slot_id FK "nullable"
+        allocation_pool_type pool_type
+        integer token_number
+        visit_type visit_kind
+        booking_channel_type channel
+        appointment_status status
+        boolean is_emergency_priority
+        text reason_for_visit
+        varchar referred_by_name
+        uuid booked_by_user_id FK
+        uuid override_authorized_by_user_id FK
+        text override_reason
+        timestamptz checked_in_at
+        timestamptz consult_started_at
+        timestamptz completed_at
+        timestamptz cancelled_at
+        cancellation_actor_type cancelled_by_role
+        text cancellation_reason
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    reschedule_histories {
+        uuid id PK
+        uuid appointment_id FK
+        uuid previous_session_id FK
+        uuid previous_allocation_id FK
+        uuid previous_timed_slot_id FK "nullable"
+        allocation_pool_type previous_pool_type
+        integer previous_token_number
+        uuid new_session_id FK
+        uuid new_allocation_id FK
+        uuid new_timed_slot_id FK "nullable"
+        allocation_pool_type new_pool_type
+        integer new_token_number
+        uuid rescheduled_by_user_id FK
+        reschedule_initiator_type initiator_role
+        text reason
+        timestamptz rescheduled_at
+    }
+
+    notifications {
+        uuid id PK
+        uuid appointment_id FK "nullable"
+        uuid recipient_patient_id FK "nullable"
+        uuid recipient_user_id FK "nullable"
+        notification_channel channel
+        notification_event_type event_type
+        varchar template_code
+        jsonb payload_snapshot
+        notification_delivery_status status
+        varchar idempotency_key UK
+        text failure_reason
+        timestamptz scheduled_for
+        timestamptz sent_at
+        timestamptz delivered_at
+        timestamptz read_at
+        timestamptz created_at
+    }
+
+    %% ─── USER MODULE RELATIONSHIPS ───
+    users ||--o{ oauth_accounts : "has"
+    users ||--o{ user_roles : "holds"
+    users ||--o{ verification_tokens : "owns"
+    users ||--o| patients : "may be linked as"
+    users ||--o| doctors : "may be"
+    users ||--o{ patients : "registers (staff)"
+
+    %% ─── DOCTOR MODULE RELATIONSHIPS ───
+    doctors ||--o| doctor_profiles : "has one"
+    doctors ||--o{ doctor_specializations : "assigned"
+    specializations ||--o{ doctor_specializations : "used by"
+
+    %% ─── AVAILABILITY MODULE RELATIONSHIPS ───
+    doctors ||--o{ recurring_availability_rules : "defines"
+    doctors ||--o{ availability_exceptions : "has"
+    doctors ||--o{ elastic_sessions : "runs"
+    recurring_availability_rules ||--o{ elastic_sessions : "generates"
+    elastic_sessions ||--o{ session_timed_slots : "contains"
+    elastic_sessions ||--o{ slot_allocations : "has pools"
+    session_timed_slots ||--o{ slot_allocations : "has slot-level pools"
+
+    %% ─── APPOINTMENT MODULE RELATIONSHIPS ───
+    patients ||--o{ appointments : "books"
+    doctors ||--o{ appointments : "receives"
+    elastic_sessions ||--o{ appointments : "contains"
+    slot_allocations ||--o{ appointments : "consumed by"
+    session_timed_slots ||--o{ appointments : "at"
+    appointments ||--o{ reschedule_histories : "has (immutable)"
+    elastic_sessions ||--o{ reschedule_histories : "previous session"
+    elastic_sessions ||--o{ reschedule_histories : "new session"
+    appointments ||--o{ notifications : "triggers"
+    patients ||--o{ notifications : "receives"

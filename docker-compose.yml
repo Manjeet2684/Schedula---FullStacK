@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: schedula_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: schedula
+      POSTGRES_PASSWORD: schedula_dev_password
+      POSTGRES_DB: schedula
+    ports:
+      - "5433:5432"
+    volumes:
+      - schedula_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U schedula -d schedula"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  schedula_pgdata:
+    driver: local
