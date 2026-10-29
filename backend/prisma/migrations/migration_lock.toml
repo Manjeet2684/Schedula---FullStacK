@@ -1,4 +1,4 @@
-provider = "prisma"
+provider = "postgresql"
 
 [[migrations]]
 migration = "20261026000000_init_schedula_schema"
