@@ -165,6 +165,7 @@ export default function WorkspacePage() {
 <Link href="/" className="brand"><span className="brand-mark">S</span><span>Schedula<span className="brand-dot">.</span></span></Link>
 <div className="nav-links">
 <Link href="/#doctors">Public directory</Link>
+{user?.roles.includes('ADMIN') && <Link href="/workspace/payments">Payment operations</Link>}
 {user?.roles.includes('PATIENT') && <Link href="/appointments">My appointments</Link>}
 </div>
 <div className="nav-actions">
