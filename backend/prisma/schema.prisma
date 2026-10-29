@@ -297,6 +297,7 @@ model Patient {
   registeredBy     User?         @relation("RegisteredByUser", fields: [registeredByUserId], references: [id], onDelete: SetNull)
   appointments     Appointment[]
   notifications    Notification[]
+  payments         Payment[]
 
   @@index([contactPhone])
   @@index([givenName, familyName])
@@ -525,6 +526,7 @@ model Appointment {
   overrideAuthorizedBy  User?              @relation("OverrideAuthorizedBy", fields: [overrideAuthorizedByUserId], references: [id], onDelete: SetNull)
   rescheduleHistories   RescheduleHistory[]
   notifications         Notification[]
+  payments              Payment[]
 
   @@index([patientId, createdAt(sort: Desc)])
   @@index([sessionId, status, isEmergencyPriority(sort: Desc), tokenNumber(sort: Asc)])
@@ -582,4 +584,64 @@ model Notification {
 
   @@index([status, scheduledFor])
   @@map("notifications")
+}
+
+
+enum PaymentProvider {
+  RAZORPAY
+
+  @@map("payment_provider")
+}
+
+enum PaymentStatus {
+  CREATED
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUND_PENDING
+  REFUNDED
+
+  @@map("payment_status")
+}
+
+model Payment {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  appointmentId     String         @map("appointment_id") @db.Uuid
+  patientId         String         @map("patient_id") @db.Uuid
+  provider          PaymentProvider
+  providerOrderId   String         @unique @map("provider_order_id") @db.VarChar(80)
+  providerPaymentId String?        @unique @map("provider_payment_id") @db.VarChar(80)
+  providerRefundId  String?        @unique @map("provider_refund_id") @db.VarChar(80)
+  amountMinor       Int            @map("amount_minor")
+  currency          String         @db.VarChar(3)
+  status            PaymentStatus  @default(CREATED)
+  idempotencyKey    String         @unique @map("idempotency_key") @db.VarChar(160)
+  refundReason      String?        @map("refund_reason") @db.Text
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  capturedAt        DateTime?      @map("captured_at") @db.Timestamptz
+  refundRequestedAt DateTime?      @map("refund_requested_at") @db.Timestamptz
+  refundedAt        DateTime?      @map("refunded_at") @db.Timestamptz
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  appointment  Appointment           @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  patient      Patient               @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  webhookEvents PaymentWebhookEvent[]
+
+  @@index([patientId, createdAt(sort: Desc)])
+  @@index([appointmentId, createdAt(sort: Desc)])
+  @@map("payments")
+}
+
+model PaymentWebhookEvent {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerEventId String   @unique @map("provider_event_id") @db.VarChar(100)
+  eventType       String   @map("event_type") @db.VarChar(100)
+  paymentId       String?  @map("payment_id") @db.Uuid
+  payload         Json
+  receivedAt      DateTime @default(now()) @map("received_at") @db.Timestamptz
+
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@index([paymentId, receivedAt(sort: Desc)])
+  @@map("payment_webhook_events")
 }

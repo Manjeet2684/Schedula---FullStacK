@@ -257,3 +257,19 @@ Full details in `docs/ER-Diagram-Review.md`.
 ## License
 
 MIT — PearlThoughts Internship Project
+
+
+## Online Payments (PR2)
+
+The online checkout uses Razorpay. Configure `RAZORPAY_KEY_ID`,
+`RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` in `backend/.env`.
+Use Razorpay test-mode credentials during development; never commit real secrets.
+
+The backend creates orders from appointment fee snapshots, verifies payment
+signatures server-side, checks the canonical provider payment state, and handles
+signed webhooks idempotently. Configure the webhook URL as
+`/api/v1/payments/webhook` and subscribe to payment captured/failed and refund
+processed/failed events.
+
+The PR2 payment migration depends on PR1's booking and fee-snapshot migration.
+Apply it only after PR1's migration is deployed.

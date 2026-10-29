@@ -111,6 +111,7 @@ export default function HomePage() {
 <a href="#how-it-works">How it works</a>
 {user?.roles.includes('PATIENT') && <>
 <Link href="/appointments">My appointments</Link>
+<Link href="/payments">Payments</Link>
 <Link href="/profile">My profile</Link>
 </>}
 {user && !user.roles.includes('PATIENT') && <Link href="/workspace">Workspace</Link>}

@@ -63,6 +63,7 @@ export default function AppointmentsPage() {
 <div className="nav-links">
 <Link href="/#doctors">Find a doctor</Link>
 <Link href="/workspace">Workspace</Link>
+<Link href="/checkout">Payments</Link>
 </div>
 <span className="signed-in">{user?.email || 'Patient portal'}</span>
 </nav>

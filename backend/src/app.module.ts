@@ -6,6 +6,7 @@ import { CatalogModule } from './catalog/catalog.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { StaffModule } from './staff/staff.module';
 import { PatientsModule } from './patients/patients.module';
+import { PaymentsModule } from './payments/payments.module';
 
-@Module({ imports: [PrismaModule, HealthModule, AuthModule, CatalogModule, AppointmentsModule, StaffModule, PatientsModule] })
+@Module({ imports: [PrismaModule, HealthModule, AuthModule, CatalogModule, AppointmentsModule, StaffModule, PatientsModule, PaymentsModule] })
 export class AppModule {}
