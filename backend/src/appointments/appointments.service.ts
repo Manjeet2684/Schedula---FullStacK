@@ -7,6 +7,7 @@ import { AuthenticatedActor } from '../auth/session.guard';
 type Tx = Prisma.TransactionClient;
 type Body = Record<string, unknown>;
 type VisitKind = 'NEW_VISIT' | 'FOLLOW_UP';
+type PaymentMethod = 'PAY_AT_COUNTER' | 'PAY_ONLINE';
 
 // Clinic timezone — configure via CLINIC_TZ env variable (IANA tz name, e.g. "Asia/Kolkata").
 // Defaults to Asia/Kolkata if unset. Used for "has this session/slot already elapsed?" checks.
@@ -78,7 +79,7 @@ export class AppointmentsService {
     if (!actor.patientId) throw new ForbiddenException('This account does not have a patient profile.');
     return this.prisma.appointment.findMany({
       where: { OR: [{ patientId: actor.patientId }, { patient: { is: { userId: null, registeredByUserId: actor.id } } }] },
-      include: { doctor: { include: { profile: true, specializations: { include: { specialization: true } } } }, session: true, timedSlot: true },
+      include: { doctor: { include: { profile: true, specializations: { include: { specialization: true } } } }, session: true, timedSlot: true, payments: { select: { status: true, createdAt: true } } },
       orderBy: { createdAt: 'desc' }, take: 100,
     });
   }
@@ -101,6 +102,11 @@ export class AppointmentsService {
     const body = (raw ?? {}) as Body;
     const allocationId = text(body, 'allocationId', 64);
     const kind = visitKind(body['visitKind']);
+    const rawPaymentMethod = body['paymentMethod'];
+    if (rawPaymentMethod !== undefined && rawPaymentMethod !== 'PAY_AT_COUNTER' && rawPaymentMethod !== 'PAY_ONLINE') {
+      throw new BadRequestException('paymentMethod must be PAY_AT_COUNTER or PAY_ONLINE.');
+    }
+    const selectedPaymentMethod: PaymentMethod = rawPaymentMethod === 'PAY_ONLINE' ? 'PAY_ONLINE' : 'PAY_AT_COUNTER';
     const reasonForVisit = typeof body['reasonForVisit'] === 'string' ? body['reasonForVisit'].trim().slice(0, 4000) || null : null;
     if (channel === 'WEB_PATIENT' && body['poolType'] !== undefined && body['poolType'] !== 'ADVANCE_BOOKING') throw new BadRequestException('Online bookings must use the advance-booking pool.');
     try {
@@ -133,8 +139,10 @@ export class AppointmentsService {
           // Reject if this specific timed slot has already elapsed
           if (sessionDateTime(session.sessionDate, slot.slotEndTime) <= now) throw new ConflictException('This appointment time has already passed.');
         }
-        const duplicate = await tx.appointment.findFirst({ where: { patientId, sessionId: session.id, status: { not: 'CANCELLED' } } });
-        if (duplicate) throw new ConflictException('This patient already has an active appointment in this session.');
+        // A patient may book a different timed slot in the same clinic session.
+        // Prevent duplicates for the exact allocation, not the whole session.
+        const duplicate = await tx.appointment.findFirst({ where: { patientId, allocationId: allocation.id, status: { not: 'CANCELLED' } } });
+        if (duplicate) throw new ConflictException('You already have an active appointment for this time slot. Choose another time.');
 
         const consumed = await tx.slotAllocation.updateMany({ where: { id: allocation.id, bookedCount: { lt: allocation.maxCapacity } }, data: { bookedCount: { increment: 1 }, version: { increment: 1 } } });
         if (consumed.count !== 1) throw new ConflictException('This slot has just filled. Choose another available time.');
@@ -150,7 +158,7 @@ export class AppointmentsService {
           data: {
             bookingReference: bookingReference(), patientId, doctorId: session.doctorId, sessionId: session.id,
             allocationId: allocation.id, timedSlotId: allocation.timedSlotId, poolType: allocation.poolType,
-            tokenNumber, visitKind: kind, channel, status: 'BOOKED', reasonForVisit, bookedByUserId: actor.id,
+            tokenNumber, visitKind: kind, channel, status: 'BOOKED', paymentMethod: selectedPaymentMethod, reasonForVisit, bookedByUserId: actor.id,
             feeAmountMinor, feeCurrency,
           },
           include: { doctor: { include: { profile: true } }, session: true, timedSlot: true, patient: { select: { id: true, givenName: true, familyName: true, contactPhone: true, patientCode: true } } },
@@ -221,8 +229,8 @@ export class AppointmentsService {
         if (!slot || slot.status !== 'AVAILABLE' || slot.sessionId !== newSession.id) throw new ConflictException('The new time is no longer available.');
         if (sessionDateTime(newSession.sessionDate, slot.slotEndTime) <= rescheduleNow) throw new ConflictException('The destination time slot has already passed.');
       }
-      const duplicate = await tx.appointment.findFirst({ where: { id: { not: appointmentId }, patientId: current.patientId, sessionId: newSession.id, status: { not: 'CANCELLED' } } });
-      if (duplicate) throw new ConflictException('This patient already has an active appointment in the destination session.');
+      const duplicate = await tx.appointment.findFirst({ where: { id: { not: appointmentId }, patientId: current.patientId, allocationId: newAllocation.id, status: { not: 'CANCELLED' } } });
+      if (duplicate) throw new ConflictException('This patient already has an appointment for the destination time slot.');
       const reserve = await tx.slotAllocation.updateMany({ where: { id: newAllocation.id, bookedCount: { lt: newAllocation.maxCapacity } }, data: { bookedCount: { increment: 1 }, version: { increment: 1 } } });
       if (reserve.count !== 1) throw new ConflictException('The new time has just filled.');
       const release = await tx.slotAllocation.updateMany({ where: { id: current.allocationId, bookedCount: { gt: 0 } }, data: { bookedCount: { decrement: 1 }, version: { increment: 1 } } });

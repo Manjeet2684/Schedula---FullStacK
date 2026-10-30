@@ -8,12 +8,14 @@ type RazorpayCheckoutResponse = { razorpay_order_id: string; razorpay_payment_id
 type PaymentOrder = { paymentId: string; orderId?: string; amount: number; currency: string; keyId?: string; status: string };
 type Appointment = {
   id: string; bookingReference: string; status: string; feeAmountMinor: number; feeCurrency: string; visitKind: string;
+  paymentMethod: 'PAY_AT_COUNTER' | 'PAY_ONLINE'; payments?: Array<{ status: string }>;
   doctor: { profile?: { displayName: string } | null }; session: { sessionDate: string; startTime: string };
 };
 declare global { interface Window { Razorpay?: new (options: Record<string, unknown>) => { open: () => void }; } }
 
 export default function CheckoutPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [requestedAppointmentId, setRequestedAppointmentId] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -22,7 +24,10 @@ export default function CheckoutPage() {
     try { setAppointments(await api<Appointment[]>('/appointments/mine')); }
     catch (e) { setError(e instanceof Error ? e.message : 'Could not load appointments.'); }
   }
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    setRequestedAppointmentId(new URLSearchParams(window.location.search).get('appointmentId') ?? '');
+    void refresh();
+  }, []);
 
   async function pay(appointment: Appointment) {
     setBusy(appointment.id); setError(''); setNotice('');
@@ -69,7 +74,7 @@ export default function CheckoutPage() {
     }
   }
 
-  const payable = appointments.filter((a) => a.status === 'BOOKED' && a.feeAmountMinor > 0);
+  const payable = appointments.filter((a) => a.status === 'BOOKED' && a.feeAmountMinor > 0 && a.paymentMethod === 'PAY_ONLINE' && !a.payments?.some((payment) => payment.status === 'CAPTURED') && (!requestedAppointmentId || a.id === requestedAppointmentId));
   return <main className="app-shell subpage-shell">
     <nav className="nav-bar page-width"><Link href="/" className="brand"><span className="brand-mark">S</span><span>Schedula<span className="brand-dot">.</span></span></Link><div className="nav-links"><Link href="/appointments">My appointments</Link><Link href="/payments">Payment history</Link></div></nav>
     <section className="subpage-hero page-width"><span className="eyebrow">SECURE CHECKOUT</span><h1>Payment, <em>with clarity.</em></h1><p>Complete checkout through Razorpay. Schedula marks payment as captured only after server-side verification.</p></section>
@@ -77,7 +82,7 @@ export default function CheckoutPage() {
       {error && <div className="notice notice-error" role="alert"><span>!</span><p>{error}</p></div>}
       {notice && <div className="notice notice-success" role="status"><span>✓</span><p>{notice}</p></div>}
       {payable.length === 0
-        ? <div className="empty-state"><h2>No payable appointments found</h2><p>Book a visit first, or check your appointment history.</p><Link className="button button-terra" href="/appointments">My appointments</Link></div>
+        ? <div className="empty-state"><h2>No online payments due</h2><p>Only booked appointments with Pay online selected appear here. Pay-at-counter appointments are settled at the clinic.</p><Link className="button button-terra" href="/appointments">My appointments</Link></div>
         : <div className="appointment-list">{payable.map((a) => <article className="appointment-card" key={a.id}><div className="appointment-main"><span className="eyebrow">{a.visitKind.replaceAll('_', ' ')}</span><h3>{a.doctor.profile?.displayName ?? 'Your doctor'}</h3><p>{new Date(a.session.sessionDate).toLocaleDateString('en-IN')} · {a.bookingReference}</p><div className="appointment-meta"><strong>{money(a.feeAmountMinor, a.feeCurrency)}</strong><span>Pay online</span></div><button className="button button-terra" disabled={Boolean(busy)} onClick={() => void pay(a)}>{busy === a.id ? 'Opening secure checkout…' : 'Pay with Razorpay ↗'}</button></div></article>)}</div>}
       <p className="fine-print">A browser callback is not proof of payment. The server verifies the payment with Razorpay and processes signed webhooks.</p>
     </section>

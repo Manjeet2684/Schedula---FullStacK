@@ -20,6 +20,8 @@ export default function HomePage() {
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [date, setDate] = useState(localDate());
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [selectedAllocationId, setSelectedAllocationId] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'PAY_AT_COUNTER' | 'PAY_ONLINE'>('PAY_AT_COUNTER');
   const [visitKind, setVisitKind] = useState<'NEW_VISIT' | 'FOLLOW_UP'>('NEW_VISIT');
   const [dependents, setDependents] = useState<Dependent[]>([]);
   const [bookingPatientId, setBookingPatientId] = useState('');
@@ -49,7 +51,7 @@ export default function HomePage() {
   }, []);
 
   async function openAvailability(doctor: Doctor) {
-    setSelectedDoctor(doctor); setSessions([]); setNotice(''); setError(''); setDate(localDate());
+    setSelectedDoctor(doctor); setSessions([]); setSelectedAllocationId(''); setPaymentMethod('PAY_AT_COUNTER'); setNotice(''); setError(''); setDate(localDate());
     if (user?.roles.includes('PATIENT') && user.patientId) {
       setBookingPatientId(user.patientId);
       api<Dependent[]>('/patients/me/dependents').then(setDependents).catch(() => setDependents([]));
@@ -59,21 +61,24 @@ export default function HomePage() {
   }
 
   async function changeDate(value: string) {
-    setDate(value); setSessions([]); setError('');
+    setDate(value); setSessions([]); setSelectedAllocationId(''); setError('');
     if (!selectedDoctor || !value) return;
     try { setSessions(await api<Session[]>(`/catalog/doctors/${selectedDoctor.id}/availability?date=${value}`)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Unable to load availability.'); }
   }
 
-  async function reserve(allocationId: string) {
+  async function reserve() {
+    if (!selectedAllocationId) { setError('Select an appointment time first.'); return; }
     if (!user) { setAuthMode('login'); setAuthOpen(true); setNotice('Sign in or create a patient account before booking.'); return; }
-    if (!user.roles.includes('PATIENT')) { setError('Appointments can be booked from a patient account.'); return; }
+    if (!user.roles.includes('PATIENT') || !user.patientId) { setError('Please sign in with a patient account to book an appointment.'); return; }
     setBusy(true); setError(''); setNotice('');
     try {
-      const appointment = await api<{ bookingReference: string }>('/appointments', { method: 'POST', body: JSON.stringify({ allocationId, visitKind, patientId: bookingPatientId || user.patientId }) });
-      setNotice(`Appointment confirmed. Your reference is ${appointment.bookingReference}.`);
-      setSelectedDoctor(null);
-    } catch (e) { setError(e instanceof Error ? e.message : 'Booking failed.'); }
+      const appointment = await api<{ id: string; bookingReference: string; paymentMethod: string }>('/appointments', {
+        method: 'POST',
+        body: JSON.stringify({ allocationId: selectedAllocationId, visitKind, paymentMethod, patientId: bookingPatientId || user.patientId }),
+      });
+      window.location.assign(`/appointments?booked=${encodeURIComponent(appointment.bookingReference)}`);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Booking failed. Please check the message and try another slot.'); }
     finally { setBusy(false); }
   }
 
@@ -88,7 +93,7 @@ export default function HomePage() {
       const result = await api<{ user: User; notice?: string }>(authMode === 'register' ? '/auth/register' : authMode === 'doctor' ? '/auth/register-doctor' : '/auth/login', { method: 'POST', body: JSON.stringify(payload) });
       setUser(result.user); setAuthOpen(false); setNotice(result.notice ?? `Signed in as ${result.user.email}.`);
       if (result.user.roles.includes('PATIENT') && result.user.patientId) { setBookingPatientId(result.user.patientId); api<Dependent[]>('/patients/me/dependents').then(setDependents).catch(() => setDependents([])); }
-      if (selectedDoctor && result.user.roles.includes('PATIENT')) await changeDate(date);
+      // Keep the selected slot when the patient signs in from the booking dialog.
     } catch (e) { setError(e instanceof Error ? e.message : 'Authentication failed.'); }
     finally { setBusy(false); }
   }
@@ -98,6 +103,7 @@ export default function HomePage() {
   }
 
   const availableCount = useMemo(() => sessions.reduce((sum, session) => sum + session.allocations.filter((a) => a.bookable).length, 0), [sessions]);
+  const selectedAllocation = sessions.flatMap((session) => session.allocations).find((allocation) => allocation.id === selectedAllocationId);
   void availableCount;
 
   return <main className="app-shell">
@@ -300,6 +306,13 @@ export default function HomePage() {
 <button className={visitKind === 'NEW_VISIT' ? 'active' : ''} onClick={() => setVisitKind('NEW_VISIT')}>New visit</button>
 <button className={visitKind === 'FOLLOW_UP' ? 'active' : ''} onClick={() => setVisitKind('FOLLOW_UP')}>Follow-up</button>
 </div>
+<label className="field-label payment-choice-label">Payment option
+<select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as 'PAY_AT_COUNTER' | 'PAY_ONLINE')}>
+<option value="PAY_AT_COUNTER">Pay on counter</option>
+<option value="PAY_ONLINE">Pay online (Razorpay)</option>
+</select>
+<small>{paymentMethod === 'PAY_AT_COUNTER' ? 'Reserve now and pay at the clinic.' : 'Reserve now, then complete secure online checkout.'}</small>
+</label>
 <div className="availability-list">
 {sessions.length === 0
   ? <div className="empty-inline"><span>◷</span><p>No advance-booking slots found for this date. Choose another date.</p></div>
@@ -311,15 +324,20 @@ export default function HomePage() {
 </div>
 <div className="allocation-list">
 {session.allocations.filter((a) => a.bookable && a.poolType === 'ADVANCE_BOOKING').map((allocation) =>
-<button disabled={busy} key={allocation.id} className="allocation-button" onClick={() => void reserve(allocation.id)}>
+<button type="button" key={allocation.id} className="allocation-button" aria-pressed={selectedAllocationId === allocation.id} onClick={() => { setSelectedAllocationId(allocation.id); setError(''); }}>
 <span>{allocation.slotStartTime ? `${allocation.slotStartTime.slice(0, 5)}–${allocation.slotEndTime?.slice(0, 5)}` : 'Next available token'}</span>
 <small>{allocation.availableCount} left</small>
-<b>{busy ? '…' : 'Select ↗'}</b>
+<b>{selectedAllocationId === allocation.id ? 'Selected ✓' : 'Select time'}</b>
 </button>)}
 </div>
 </div>)}
 </div>
-<p className="fine-print">Fees are displayed from the doctor profile. Online payment is not enabled in this booking release.</p>
+{error && <div className="notice notice-error booking-inline-error" role="alert"><span>!</span><p>{error}</p></div>}
+{selectedAllocation && <div className="selected-booking-panel">
+<p>Selected time: <strong>{selectedAllocation.slotStartTime ? `${selectedAllocation.slotStartTime.slice(0, 5)}–${selectedAllocation.slotEndTime?.slice(0, 5)}` : 'Next available token'}</strong></p>
+<button className="button button-terra button-full" disabled={busy} onClick={() => void reserve()}>{busy ? 'Confirming appointment…' : 'Confirm appointment'}</button>
+</div>}
+<p className="fine-print">Your appointment is added to My Appointments after confirmation. Online payments are completed separately through secure Razorpay checkout.</p>
 </section>
 </div>}
 

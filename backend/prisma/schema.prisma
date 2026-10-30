@@ -500,6 +500,7 @@ model Appointment {
   visitKind                   VisitType           @map("visit_kind")
   channel                     BookingChannelType
   status                      AppointmentStatus   @default(BOOKED)
+  paymentMethod               AppointmentPaymentMethod @default(PAY_AT_COUNTER) @map("payment_method")
   feeAmountMinor              Int                 @default(0) @map("fee_amount_minor")
   feeCurrency                 String              @default("INR") @map("fee_currency") @db.VarChar(3)
   isEmergencyPriority         Boolean             @default(false) @map("is_emergency_priority")
@@ -586,6 +587,13 @@ model Notification {
   @@map("notifications")
 }
 
+
+enum AppointmentPaymentMethod {
+  PAY_AT_COUNTER
+  PAY_ONLINE
+
+  @@map("appointment_payment_method")
+}
 
 enum PaymentProvider {
   RAZORPAY
