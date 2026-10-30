@@ -96,8 +96,10 @@ export class CatalogService {
             id: allocation.id,
             poolType: allocation.poolType,
             timedSlotId: allocation.timedSlotId,
-            slotStartTime: timedSlot?.slotStartTime ?? null,
-            slotEndTime: timedSlot?.slotEndTime ?? null,
+            // PostgreSQL TIME fields are represented by Prisma as Date values
+            // anchored to 1970-01-01. Return only HH:mm for the booking UI.
+            slotStartTime: timedSlot?.slotStartTime.toISOString().slice(11, 16) ?? null,
+            slotEndTime: timedSlot?.slotEndTime.toISOString().slice(11, 16) ?? null,
             slotStatus: timedSlot?.status ?? null,
             maxCapacity: allocation.maxCapacity,
             bookedCount: allocation.bookedCount,
