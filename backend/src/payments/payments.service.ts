@@ -70,6 +70,7 @@ export class PaymentsService {
         throw new ForbiddenException('You can only pay for your own appointment or a dependent you registered.');
       }
       if (appointment.status !== 'BOOKED') throw new ConflictException('Only booked appointments can be paid online.');
+      if (appointment.paymentMethod !== 'PAY_ONLINE') throw new ConflictException('This appointment is set to pay at the clinic counter.');
       if (appointment.feeAmountMinor <= 0) throw new BadRequestException('This appointment has no payable fee.');
 
       const existing = await tx.payment.findFirst({
