@@ -231,7 +231,6 @@ export class AppointmentsService {
       }
       const duplicate = await tx.appointment.findFirst({ where: { id: { not: appointmentId }, patientId: current.patientId, allocationId: newAllocation.id, status: { not: 'CANCELLED' } } });
       if (duplicate) throw new ConflictException('This patient already has an appointment for the destination time slot.');
-      if (duplicate) throw new ConflictException('This patient already has an active appointment in the destination session.');
       const reserve = await tx.slotAllocation.updateMany({ where: { id: newAllocation.id, bookedCount: { lt: newAllocation.maxCapacity } }, data: { bookedCount: { increment: 1 }, version: { increment: 1 } } });
       if (reserve.count !== 1) throw new ConflictException('The new time has just filled.');
       const release = await tx.slotAllocation.updateMany({ where: { id: current.allocationId, bookedCount: { gt: 0 } }, data: { bookedCount: { decrement: 1 }, version: { increment: 1 } } });
