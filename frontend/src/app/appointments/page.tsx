@@ -7,6 +7,7 @@ import { api, localDate, money } from '../../lib/api';
 type User = { id: string; email: string | null; roles: string[]; patientId: string | null };
 type Appointment = {
   id: string; bookingReference: string; status: string; tokenNumber: number | null; visitKind: string; feeAmountMinor: number; feeCurrency: string;
+  paymentMethod: 'PAY_AT_COUNTER' | 'PAY_ONLINE'; payments?: Array<{ status: string; createdAt: string }>;
   reasonForVisit?: string | null; createdAt: string; doctor: { id: string; profile?: { displayName: string } | null }; session: { sessionDate: string; startTime: string; endTime: string; sessionMode: string }; timedSlot?: { slotStartTime: string; slotEndTime: string } | null;
 };
 type Session = { id: string; allocations: Array<{ id: string; poolType: string; bookable: boolean; timedSlotId: string | null; slotStartTime: string | null; slotEndTime: string | null }> };
@@ -31,7 +32,11 @@ export default function AppointmentsPage() {
     } catch (e) { setError(e instanceof Error ? e.message : 'Unable to load appointments.'); }
     finally { setLoading(false); }
   }
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    const bookedReference = new URLSearchParams(window.location.search).get('booked');
+    if (bookedReference) setNotice(`Appointment ${bookedReference} was successfully booked.`);
+    void refresh();
+  }, []);
 
   async function cancel(item: Appointment) {
     const reason = window.prompt(`Reason for cancelling ${item.bookingReference}:`, 'Change of plans');
@@ -84,6 +89,7 @@ export default function AppointmentsPage() {
       : <div className="appointment-list">{items.map((item) => {
           const day = new Date(item.session.sessionDate);
           const isUpcoming = item.status === 'BOOKED' || item.status === 'CHECKED_IN';
+          const isPaidOnline = item.payments?.some((payment) => payment.status === 'CAPTURED') ?? false;
           return <article className="appointment-card" key={item.id}>
 <div className="appointment-date">
 <strong>{Number.isNaN(day.getTime()) ? '—' : day.toLocaleDateString('en-IN', { day: '2-digit' })}</strong>
@@ -98,11 +104,13 @@ export default function AppointmentsPage() {
 <span>◷ {item.timedSlot ? `${item.timedSlot.slotStartTime.slice(11, 16)}–${item.timedSlot.slotEndTime.slice(11, 16)}` : `${item.session.startTime.slice(11, 16)}–${item.session.endTime.slice(11, 16)}`}</span>
 {item.tokenNumber !== null && <span>Token #{item.tokenNumber}</span>}
 <span>{money(item.feeAmountMinor, item.feeCurrency)}</span>
+<span>{item.paymentMethod === 'PAY_ONLINE' ? (isPaidOnline ? 'Paid online' : 'Online payment selected') : 'Pay at counter'}</span>
 </div>
 <div className="appointment-ref">
 <span>Confirmation reference</span><code>{item.bookingReference}</code>
 </div>
 {isUpcoming && <div className="appointment-actions">
+{item.paymentMethod === 'PAY_ONLINE' && item.feeAmountMinor > 0 && !isPaidOnline && <Link className="button button-terra" href={`/checkout?appointmentId=${item.id}`}>Pay online ↗</Link>}
 <button className="button button-outline" disabled={working} onClick={() => void loadReschedule(item)}>Change time</button>
 <button className="button button-quiet danger-text" disabled={working} onClick={() => void cancel(item)}>Cancel appointment</button>
 </div>}
