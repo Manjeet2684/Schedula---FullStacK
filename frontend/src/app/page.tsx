@@ -93,7 +93,7 @@ export default function HomePage() {
       const result = await api<{ user: User; notice?: string }>(authMode === 'register' ? '/auth/register' : authMode === 'doctor' ? '/auth/register-doctor' : '/auth/login', { method: 'POST', body: JSON.stringify(payload) });
       setUser(result.user); setAuthOpen(false); setNotice(result.notice ?? `Signed in as ${result.user.email}.`);
       if (result.user.roles.includes('PATIENT') && result.user.patientId) { setBookingPatientId(result.user.patientId); api<Dependent[]>('/patients/me/dependents').then(setDependents).catch(() => setDependents([])); }
-      if (selectedDoctor && result.user.roles.includes('PATIENT')) await changeDate(date);
+      // Keep the selected slot when the patient signs in from the booking dialog.
     } catch (e) { setError(e instanceof Error ? e.message : 'Authentication failed.'); }
     finally { setBusy(false); }
   }
