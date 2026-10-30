@@ -143,7 +143,6 @@ export class AppointmentsService {
         // Prevent duplicates for the exact allocation, not the whole session.
         const duplicate = await tx.appointment.findFirst({ where: { patientId, allocationId: allocation.id, status: { not: 'CANCELLED' } } });
         if (duplicate) throw new ConflictException('You already have an active appointment for this time slot. Choose another time.');
-        if (duplicate) throw new ConflictException('This patient already has an active appointment in this session.');
 
         const consumed = await tx.slotAllocation.updateMany({ where: { id: allocation.id, bookedCount: { lt: allocation.maxCapacity } }, data: { bookedCount: { increment: 1 }, version: { increment: 1 } } });
         if (consumed.count !== 1) throw new ConflictException('This slot has just filled. Choose another available time.');
